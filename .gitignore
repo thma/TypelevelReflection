@@ -2,4 +2,6 @@
 *~
 stack.yaml
 stack.yaml.lock
-TypelevelReflection.cabal
+*.cabal
+.idea/
+*.iml
