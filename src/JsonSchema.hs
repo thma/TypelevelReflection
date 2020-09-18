@@ -13,7 +13,7 @@
 module JsonSchema where
 
 import Control.Monad.Writer
-import Data.Aeson (Value (..), (.=), object)
+import Data.Aeson (Value (..), (.=), object, ToJSON)
 import Data.Kind (Type)
 import Data.Text (Text, pack)
 import Data.Typeable
@@ -21,6 +21,11 @@ import Data.Vector (fromList)
 import GHC.Generics
 import GHC.TypeLits
 import qualified GHC.TypeLits as Err
+import qualified Data.ByteString.Lazy.Char8 as LC8
+import Data.Aeson.Encode.Pretty ( encodePretty )
+
+pp :: (ToJSON a) => a -> IO ()
+pp = LC8.putStrLn . encodePretty
 
 data Person = Person
   { name :: String
@@ -49,3 +54,27 @@ type family ToJSONType (a :: Type) :: Symbol where
   ToJSONType Bool    = "boolean"
   ToJSONType [a]     = "array"
   ToJSONType a       = TypeName a
+  
+  
+type family RepName (x :: Type -> Type) :: Symbol where
+  RepName (D1 ('MetaData nm _ _ _) _) = nm
+type family TypeName (t :: Type) :: Symbol where
+  TypeName t = RepName (Rep t)  
+  
+makeTypeObj :: forall a . KnownSymbol (ToJSONType a) => Value
+makeTypeObj = object
+  [ "type" .=
+      String (pack . symbolVal $ Proxy @(ToJSONType a))
+  ]
+  
+makePropertyObj :: forall name . (KnownSymbol name) => Value -> Value
+makePropertyObj v = object
+  [ pack (symbolVal $ Proxy @name) .= v
+  ]  
+  
+instance (KnownSymbol nm, KnownSymbol (ToJSONType a)) => GSchema (M1 S ('MetaSel ('Just nm) _1 _2 _3) (K1 _4 a)) where
+  gschema = do
+    emitRequired @nm 
+    pure . makePropertyObj @nm
+         $ makeTypeObj @a
+  {-# INLINE gschema #-}

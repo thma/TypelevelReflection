@@ -23,7 +23,9 @@ dependencies:
 - mtl
 - text
 - aeson
+- aeson-pretty
 - vector
+- bytestring
 
 library:
   source-dirs: src
