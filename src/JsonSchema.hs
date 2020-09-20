@@ -24,6 +24,7 @@ import qualified GHC.TypeLits as Err
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.Aeson.Encode.Pretty ( encodePretty )
 
+
 pp :: (ToJSON a) => a -> IO ()
 pp = LC8.putStrLn . encodePretty
 
@@ -33,7 +34,10 @@ data Person = Person
   , phone :: Maybe String
   , permissions :: [Bool]
   }
-  deriving (Generic)
+  deriving (Generic, Show)
+
+example :: Person  
+example = Person {name = "John", age = 22, phone = Nothing, permissions = [False]}
   
 class GSchema (a :: Type -> Type) where
   gschema :: Writer [Text] Value
@@ -78,3 +82,51 @@ instance (KnownSymbol nm, KnownSymbol (ToJSONType a)) => GSchema (M1 S ('MetaSel
     pure . makePropertyObj @nm
          $ makeTypeObj @a
   {-# INLINE gschema #-}
+
+instance (GSchema f, GSchema g) => GSchema (f :*: g) where
+  gschema =
+    mergeObjects <$> gschema @f
+                 <*> gschema @g
+  {-# INLINE gschema #-}
+
+instance (TypeError ('Err.Text "JSON Schema does not support sum types")) => GSchema (f :+: g) where
+  gschema = error "JSON Schema does not support sum types"
+  {-# INLINE gschema #-}
+
+instance GSchema a => GSchema (M1 C _1 a) where
+  gschema = gschema @a
+  {-# INLINE gschema #-}
+
+instance (GSchema a, KnownSymbol nm) => GSchema (M1 D ('MetaData nm _1 _2 _3) a) where
+  gschema = do
+    sch <- gschema @a
+    pure $ object
+      [ "title"      .= (String . pack . symbolVal $ Proxy @nm)
+      , "type"       .= String "object"
+      , "properties" .= sch
+      ]
+  {-# INLINE gschema #-}
+
+schema :: forall a . (GSchema (Rep a), Generic a) => Value
+schema = let (v, reqs) = runWriter $ gschema @(Rep a)
+          in mergeObjects v $ object
+          [ "required" .=
+            Array (fromList $ String <$> reqs)
+          ]
+{-# INLINE schema #-}
+
+mySchema :: forall a . (GSchema (Rep a), Generic a) => a -> Value
+mySchema _x = schema @a
+
+getTypeRep :: forall a. (Typeable a) => a -> TypeRep
+getTypeRep _x = typeRep ([] :: [a])
+
+typeName :: forall a. Typeable a => String
+typeName = show . typeRep $ Proxy @a
+
+-- :set -XTypeApplications
+
+test = pp (makePropertyObj @"myproperty" (makeTypeObj @Integer))
+
+test1 = schema @Person
+
