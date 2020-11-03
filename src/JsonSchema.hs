@@ -107,7 +107,7 @@ instance (GSchema a, KnownSymbol nm) => GSchema (M1 D ('MetaData nm _1 _2 _3) a)
       ]
   {-# INLINE gschema #-}
 
-schema :: forall a . (GSchema (Rep a), Generic a) => Value
+schema :: forall a . (GSchema (Rep a)) => Value
 schema = let (v, reqs) = runWriter $ gschema @(Rep a)
           in mergeObjects v $ object
           [ "required" .=
@@ -115,10 +115,10 @@ schema = let (v, reqs) = runWriter $ gschema @(Rep a)
           ]
 {-# INLINE schema #-}
 
-mySchema :: forall a . (GSchema (Rep a), Generic a) => a -> Value
+mySchema :: forall a . (GSchema (Rep a)) => a -> Value
 mySchema _x = schema @a
 
-getTypeRep :: forall a. (Typeable a) => a -> TypeRep
+getTypeRep :: forall a. Typeable a => a -> TypeRep
 getTypeRep _x = typeRep ([] :: [a])
 
 typeName :: forall a. Typeable a => String
@@ -126,7 +126,17 @@ typeName = show . typeRep $ Proxy @a
 
 -- :set -XTypeApplications
 
+test :: IO ()
 test = pp (makePropertyObj @"myproperty" (makeTypeObj @Integer))
 
+test1 :: Value
 test1 = schema @Person
+
+test2 :: String
+test2 = typeName @Person
+
+main :: IO ()
+main = do
+  print $ schema @Person
+  pp $ mySchema example
 
